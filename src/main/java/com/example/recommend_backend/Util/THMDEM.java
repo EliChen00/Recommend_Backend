@@ -2,6 +2,7 @@ package com.example.recommend_backend.Util;
 
 import org.apache.tomcat.util.codec.binary.Base64;
 
+import java.beans.PropertyEditorSupport;
 import java.math.BigInteger;
 import java.security.PrivateKey;
 import java.security.PublicKey;
@@ -31,18 +32,19 @@ public class THMDEM {
     }
 
     public static BigInteger[] SeverKeyGen(){
-        BigInteger[] result = new BigInteger[5];
+        BigInteger[] result = new BigInteger[11];
         result[0]=GenPrime(pp);
         result[1]=GenPrime(pp);
         result[2]=GenPrime(pp);
         result[3]=result[0].multiply(result[1]);
         result[4]=result[0].multiply(result[1]).multiply(result[2]);
-        result[5]=GenPrime(pp);
-        result[6]=GenPrime(pp);
-        result[7]=GenPrime(pp);
+        result[5]=GenPrime(2*pp);
+        result[6]=GenPrime(2*pp);
+        result[7]=GenPrime(2*pp);
         result[8]=result[5].multiply(result[6]);
         result[9]=result[5].multiply(result[6]).multiply(result[7]);
-        return result;  //<p,q,s,N,T,p',q',s',N',T'> 前五个计算函数用，后五个比较算法用。
+        result[10]=GenPrime(2*pp);
+        return result;  //<p,q,s,N,T,p',q',s',N',T',p0> 前五个计算函数用，后六个比较算法用。
     }
 
     public static List<Map> Encrypt(int[] m, BigInteger p, BigInteger q, BigInteger N, BigInteger T, BigInteger p_0, String pk_ser, String pk_csp) {
@@ -134,7 +136,45 @@ public class THMDEM {
         return result;//<r,r_tag>,<C_ser,C_ser_tag>
     }
 
+    public static BigInteger Cmp(BigInteger Cx, BigInteger Cy, BigInteger r, BigInteger N, BigInteger p1, BigInteger q1, BigInteger N1, BigInteger T1, BigInteger p0, int degF){
+        BigInteger n = new BigInteger("2");
+        n = n.pow(pp);
+        BigInteger r1 = new BigInteger("2");
+        BigInteger r2 = n.subtract(new BigInteger("1"));    //n=2^32,r1=2,r2=n-1
 
+        BigInteger p1_ = p1.modInverse(N1);
+        BigInteger q1_ = q1.modInverse(N1);
+        BigInteger Cx1 = Cx.mod(N);
+        BigInteger Cy1 = Cy.mod(N);
+        BigInteger k1 = GenPrime(pp),k2 = GenPrime(pp),k3 = GenPrime(pp),k4 = GenPrime(pp);
+        BigInteger Cx2_tmp1 = Cx1.add(k1.multiply(p0));
+        BigInteger Cx2_tmp2 = p1.multiply(p1_).multiply(Cx2_tmp1.mod(q1)).add(q1.multiply(q1_).multiply(Cx2_tmp1.mod(p1)));
+        BigInteger Cx2 = (GenPrime(pp).multiply(N1).add(Cx2_tmp2)).mod(T1);
+        BigInteger Cy2_tmp1 = Cy1.add(k1.multiply(p0));
+        BigInteger Cy2_tmp2 = p1.multiply(p1_).multiply(Cy2_tmp1.mod(q1)).add(q1.multiply(q1_).multiply(Cy2_tmp1.mod(p1)));
+        BigInteger Cy2 = (GenPrime(pp).multiply(N1).add(Cy2_tmp2)).mod(T1);
+        BigInteger Cr1 = (p1.multiply(p1_).multiply(r1.mod(q1)).add(q1.multiply(q1_).multiply(r1.mod(p1))).add(GenPrime(pp).multiply(N1))).mod(T1);
+        BigInteger Cr2 = (p1.multiply(p1_).multiply(r2.mod(q1)).add(q1.multiply(q1_).multiply(r2.mod(p1))).add(GenPrime(pp).multiply(N1))).mod(T1);
+
+        BigInteger r_ = r.modInverse(T1);
+        BigInteger C_x = r_.pow(degF).multiply(Cx2).mod(T1);
+        BigInteger C_y = r_.pow(degF).multiply(Cy2).mod(T1);
+        int pi = (int) (Math.random()*2);
+        BigInteger D = pi==0? (C_x.subtract(C_y)).multiply(Cr1).add(Cr2) : (C_y.subtract(C_x)).multiply(Cr1).add(Cr2).add(Cr1);
+        BigInteger d = D.mod(N1).mod(p0);
+        BigInteger u0 = BigInteger.valueOf(d.compareTo(n)>0? 0:1);
+
+        return pi==0? u0: BigInteger.valueOf(0);
+    }
+
+    public static BigInteger Decrypt(String CF, String Cr, String sk_rec,int degF){
+        String S_r = MySM2.decryptSm2(sk_rec, Cr);
+        BigInteger r = new BigInteger(S_r);
+        String S_F = MySM2.decryptSm2(sk_rec, CF);
+        BigInteger F = new BigInteger(S_F);
+
+        return F.divide(r.pow(degF));
+    }
 
 
 }
